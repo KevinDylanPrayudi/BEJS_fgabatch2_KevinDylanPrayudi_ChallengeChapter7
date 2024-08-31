@@ -27,3 +27,22 @@ npm run dev
 ```sh
 npm run build
 ```
+
+## Server Setup
+before running server follow instruction below:
+1. add .env file and configure these variable in order server work proper
+```.env
+DATABASE_URL=
+SALT_ROUNDS=10
+JWT_SECRET=
+EMAIL=
+PASSWORD=
+SENTRY_DSN=
+```
+2. running this command below:
+```sh
+cd server && npm i
+npx prisma migrate dev --name init
+npx @sentry/wizard@latest -i sourcemaps
+npm run start:dev
+```
