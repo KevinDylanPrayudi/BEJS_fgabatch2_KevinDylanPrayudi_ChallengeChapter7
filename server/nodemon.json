@@ -1,0 +1,11 @@
+{
+    "events": {
+      "start": "clear"
+    },
+    "ext": "js,json,env",
+    "watch": [
+       ".env",
+       "./**/*.js",
+       "./bin/www"
+    ]
+}

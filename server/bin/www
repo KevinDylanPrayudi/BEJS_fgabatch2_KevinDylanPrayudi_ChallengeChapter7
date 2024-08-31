@@ -1,0 +1,333 @@
+#!/usr/bin/env node
+
+const Joi = require('joi');
+const { Prisma } = require('@prisma/client');
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('fsw-mock-test:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+const io = require("socket.io")(server, {
+  cors: {
+    origin: "http://localhost:5173",
+  },
+});
+
+io.engine.use((req, res, next) => {
+  const count = io.engine.clientsCount;
+  console.log(`sum of clients: ${count}`);
+  next();
+})
+
+io.use((socket, next) => {
+  socket.username = socket.handshake.auth.username;
+  next();
+});
+
+// const users = [];
+
+// function fetchUsers(target) {
+//   return users.filter(user => user.username === target);
+// }
+
+io.on('connection', async (socket) => {
+
+  // for (let [id, socket] of io.of("/").sockets) {
+  //   users.push({
+  //     userID: id,
+  //     username: socket.username,
+  //   });
+  // }
+
+  socket.on('disconnect', (reason) => {
+    console.log(`user ${socket.id} disconnected: ${reason}`);
+    // users.splice(users.indexOf({
+    //   userID: socket.id,
+    //   username: socket.username
+    // }), 1);
+  });
+
+  socket.on('password-changing', async (data, cb) => {
+    console.log('password-changing')
+    const MODEL = require('../models/users.model');
+    try {
+      const { password, to } = data;
+      const userTarget = to;
+
+      // const users = fetchUsers(userTarget);
+
+      await Joi.string().length(6).regex(/^\d+$/).required().messages({
+        'string.pattern.base': 'Password must contain only numbers',
+      }).validateAsync(password)
+
+      const result = await MODEL.put({ id: to, password });
+
+      // const uniqueUser = users.filter((item, index) => {
+      //   const firstIndex = users.findIndex((t) => t.userID === item.userID);
+      //   return firstIndex === index;
+      // });
+
+      // for (let user of uniqueUser) {
+      //   if (user.username === userTarget) {
+      //     socket.to(user.userID).emit('password-changing', {
+      //       password,
+      //       to
+      //     });
+      //   }
+      // }
+
+      for (let [id, socket] of io.of("/").sockets) {
+        if (socket.username === userTarget) {
+          console.log(`user who is sent the message is ${id}`)
+          socket.emit('password-changing', {
+            password,
+            to
+          });
+        }
+      }
+
+      cb({
+        status: 'success',
+        message: 'Password changed successfully'
+      })
+
+    } catch (error) {
+      cb({
+        status: 'fail',
+        message: error.message
+      })
+    }
+  });
+
+  socket.on('forgot-password', async (data, cb) => {
+    const { new_password } = require('../models/auth.model');
+    const { getId } = require('../models/users.model');
+
+    try {
+      const { password, id, token } = data;
+      const userTarget = id;
+
+      // const users = fetchUsers(userTarget);
+
+      await Joi.string().length(6).regex(/^\d+$/).required().messages({
+        'string.pattern.base': 'Password must contain only numbers',
+      }).validateAsync(password)
+
+      const user = await getId({ id: id });
+
+      if (!user || user.token !== token) {
+        return cb({
+          status: 'fail',
+          message: 'Invalid token'
+        });
+      }
+
+      const result = await new_password({ id: id, password });
+
+      // const uniqueUser = users.filter((item, index) => {
+      //   const firstIndex = users.findIndex((t) => t.userID === item.userID);
+      //   return firstIndex === index;
+      // });
+
+      // for (let user of uniqueUser) {
+      //   if (user.username === userTarget) {
+      //     socket.to(user.userID).emit('forgot-password', {
+      //       password,
+      //       id: userTarget
+      //     });
+      //   }
+      // }
+
+      for (let [id, socket] of io.of("/").sockets) {
+        if (socket.username === userTarget) {
+          console.log(`user who is sent the message is ${id}`)
+          socket.emit('forgot-password', {
+            password,
+            userTarget
+          });
+        }
+      }
+
+      cb({
+        status: 'success',
+        message: 'Password changed successfully'
+      })
+    } catch (error) {
+      cb({
+        status: 'fail',
+        message: error.message
+      })
+    }
+  });
+
+  socket.on('registration', async (data, cb) => {
+    const { registration } = require('../models/auth.model');
+    const validator = require('../validators/auth.validator');
+    data = {
+      firstname: data.firstName,
+      lastname: data.lastName,
+      email: data.email,
+      password: data.password
+    };
+
+    try {
+      await validator.registrationSchema.validateAsync(data);
+
+      await registration(data);
+      cb({
+        status: 'success',
+        message: 'User created successfully'
+      })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        return cb({
+          status: 'fail',
+          message: 'Email already exists'
+        })
+      }
+      cb({
+        status: 'fail',
+        message: error.message
+      })
+    }
+  });
+
+  socket.on('pre-forgot-password', async (data, cb) => {
+    const generateToken = require('../utils/generate-random-token');
+    const nodemailer = require('../lib/nodemailer');
+    const model = require('../models/auth.model');
+
+    try {
+      const token = generateToken(32);
+
+      const { email } = data;
+
+      const account = await model.get({ email });
+      const result = await model.forgot_password({ email, token: token });
+
+      const link = `http://localhost:5173/reset-password?token=${token}&id=${result.id}`;
+
+      const info = await nodemailer.sendMail({
+        from: process.env.EMAIL,
+        to: result.email,
+        subject: 'Reset Password',
+        text: 'Do you wanna reset your password?',
+        html: `<b>You can reset your password <a href="${link}">here</a></b>`,
+      });
+
+      console.log(`email sent to ${info.accepted[0]}`)
+
+      if (info.accepted.length > 0) {
+        cb({
+          status: 'success',
+          message: 'Email sent successfully. please check your email to reset your password'
+        })
+        socket.emit('pre-forgot-password', {
+          status: 'success',
+          message: 'Email sent successfully. please check your email to reset your password'
+        })
+      } else {
+        cb({
+          status: 'fail',
+          message: 'Your email not registered on email server'
+        })
+      }
+
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        return cb({
+          status: 'fail',
+          message: 'Email not found'
+        })
+      }
+      cb({
+        status: 'fail',
+        message: error.message
+      })
+    }
+  });
+});
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen('3000');
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
