@@ -45,7 +45,9 @@ export default {
             this.$cookies.remove('token')
             this.$cookies.remove('email')
             this.$cookies.remove('username')
-            this.$router.push('/login')
+            setTimeout(() => {
+                this.$router.push('/login')
+            }, 3000);
         })
     },
     unmounted() {

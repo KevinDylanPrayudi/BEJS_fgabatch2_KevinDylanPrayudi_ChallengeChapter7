@@ -34,7 +34,7 @@ export default {
     <div class="navbar bg-green-100 flex justify-between px-12">
       <a class="btn btn-ghost text-xl" v-if="$route.path !== '/login'" href="/dashboard">Challenge Chapter 7</a>
       <a class="btn btn-ghost text-xl" v-else href="#">Challenge Chapter 7</a>
-      <div v-if="$route.path !== '/login'">
+      <div v-if="$route.path !== '/login', $route.path !== '/registration' && $route.path !== '/reset-password' && $route.path !== '/forgot-password'">
         <div class="dropdown dropdown-end">
           <div tabindex="0" role="button" class="btn btn-ghost rounded-btn"><b>{{ $cookies.get('email')
             || $store.state.username }}</b></div>
@@ -43,7 +43,7 @@ export default {
           </ul>
         </div>
 
-        <div class="relative">
+        <div class="relative" v-if="$route.path !== '/login' &&  $route.path !== '/registration' && $route.path !== '/reset-password' && $route.path !== '/forgot-password'">
           <button
             class="flex justify-center items-center w-10 h-10 hover:bg-gray-300 rounded-full cursor-pointer"
             @click="toggleNotifications">

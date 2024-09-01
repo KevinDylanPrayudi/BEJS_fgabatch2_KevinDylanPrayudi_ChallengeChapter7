@@ -46,3 +46,10 @@ npx prisma migrate dev --name init
 npx @sentry/wizard@latest -i sourcemaps
 npm run start:dev
 ```
+Note the yellow markings. If the password is changed, it will only provide notification for the same username, while different accounts will not receive notification.
+
+![Notification bell change password](assets/1.jpg)
+
+Notice only same username recieve notification password has changed when someone ask for forgot password and the password has changed and the another account didn't. after get notification account will log out automatically.
+
+![Notification when forgot password](assets/2.jpg)

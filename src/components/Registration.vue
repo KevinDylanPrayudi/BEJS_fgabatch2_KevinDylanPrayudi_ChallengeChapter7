@@ -26,7 +26,9 @@ export default {
                     this.error = null
                     this.message = data.message
                     my_modal_2.showModal()
-                    this.$router.push('/login')
+                    setTimeout(() => {
+                        this.$router.push('/login')
+                    }, 3000);
                 }
             });
         }
